@@ -50,9 +50,9 @@ ai-fitness-club-2025/
 - Mobile app version
 
 👨‍💻 Author
-
-Your Name
+Mr. manoj kumar
 
 ⭐ Support
+will be updated soon.
 
 If you like this project, give it a star ⭐

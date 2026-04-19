@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import uuid
-import qrcode
 from io import BytesIO
 
 st.title("Welcome to 🏋️‍♂️ AI Fitness Club 2025")
@@ -53,11 +52,6 @@ st.write(f"👉 Pay to UPI ID: **{paytmqr6cljoj@ptys}**")
 
 st.markdown(f"[📲 Click here to pay via UPI]({upi_link})")
 
-# generate QR code
-qr = qrcode.make(upi_link)
-buf = BytesIO()
-qr.save(buf)
-st.image(buf.getvalue(), caption="Scan to Pay")
 
 st.info("After payment, click confirm below")
 

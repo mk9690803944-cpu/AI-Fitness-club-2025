@@ -1,13 +1,18 @@
 import streamlit as st
 import pandas as pd
 import os
+import uuid
+import qrcode
+from io import BytesIO
 
 st.title("Welcome to 🏋️‍♂️ AI Fitness Club 2025")
-st.write("get fit with us !")
+st.write("Get fit with us!")
 
 file = "members.csv"
 
-# plans and charges
+# 👉 YOUR UPI ID (CHANGE THIS)
+UPI_ID = "paytmqr6cljoj@ptys"
+
 plans = ["Monthly", "Quarterly", "Half yearly", "Yearly"]
 
 regular_charges = {
@@ -24,52 +29,68 @@ pt_charges = {
     "Yearly": 42000
 }
 
-# user input form
+# user input
 name = st.text_input("Enter your name")
 age = st.number_input("Enter your age", min_value=10, max_value=80)
-Plan = st.selectbox("select plan", plans)
+Plan = st.selectbox("Select plan", plans)
 pt = st.checkbox("Add Personal Training (PT)")
 
-# show selected charges
-if Plan:
-    st.write(f"💰 Regular charges: ₹ {regular_charges[Plan]}")
-
+# calculate total
 if pt:
-    st.write(f"🏋️‍♂️ PT Charges: ₹ {pt_charges[Plan]}")
     total = regular_charges[Plan] + pt_charges[Plan]
 else:
     total = regular_charges[Plan]
 
-st.write(f"🧾Total Charges: ₹{total}")
+st.write(f"🧾 Total Charges: ₹ {total}")
 
-# save data
+# 💳 PAYMENT SECTION
+st.subheader("💳 Pay via UPI")
+
+# create UPI payment link
+upi_link = f"upi://pay?pa={paytmqr6cljoj@ptys}&pn=FitnessClub&am={total}&cu=INR"
+
+st.write(f"👉 Pay to UPI ID: **{paytmqr6cljoj@ptys}**")
+
+st.markdown(f"[📲 Click here to pay via UPI]({upi_link})")
+
+# generate QR code
+qr = qrcode.make(upi_link)
+buf = BytesIO()
+qr.save(buf)
+st.image(buf.getvalue(), caption="Scan to Pay")
+
+st.info("After payment, click confirm below")
+
+payment_done = st.checkbox("I have completed the payment")
+
+# register
 if st.button("Register"):
     if name == "":
-        st.warning("please enter name")
+        st.warning("Please enter name")
+    elif not payment_done:
+        st.error("Please complete payment first")
     else:
         pt_selected = "yes" if pt else "no"
 
+        token = str(uuid.uuid4())[:8]
+
         new_data = pd.DataFrame(
-            [[name, age, Plan, pt_selected, total]],
-            columns=["Name", "Age", "Plan", "PT", "Total charges"]
+            [[name, age, Plan, pt_selected, total, UPI_ID, token]],
+            columns=["Name", "Age", "Plan", "PT", "Total Charges", "UPI", "Token"]
         )
 
-        # save file
         if os.path.exists(file):
             new_data.to_csv(file, mode='a', header=False, index=False)
         else:
             new_data.to_csv(file, index=False)
 
         st.success(f"✅ {name} Registered successfully!")
+        st.success(f"🎟️ Your Token ID: {token}")
 
 # show data
 if os.path.exists(file):
     df = pd.read_csv(file)
-    st.subheader("💰Membership List")
+    st.subheader("💰 Membership List")
     st.dataframe(df)
 else:
     st.info("No members yet")
-     
-
-     
- 

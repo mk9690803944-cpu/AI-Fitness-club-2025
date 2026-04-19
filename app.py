@@ -46,9 +46,9 @@ st.write(f"🧾 Total Charges: ₹ {total}")
 st.subheader("💳 Pay via UPI")
 
 # create UPI payment link
-upi_link = f"upi://pay?pa={paytmqr6cljoj@ptys}&pn=FitnessClub&am={total}&cu=INR"
+upi_link = f"upi://pay?pa={UPI_ID}&pn=FitnessClub&am={total}&cu=INR"
 
-st.write(f"👉 Pay to UPI ID: **{paytmqr6cljoj@ptys}**")
+st.write(f"👉 Pay to UPI ID: **{UPI_ID}**")
 
 st.markdown(f"[📲 Click here to pay via UPI]({upi_link})")
 

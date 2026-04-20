@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Gym Management System")
+st.set_page_config(page_title="AI Fitness club 2025")
 
 # ---------------- LOGIN SYSTEM ----------------
 st.sidebar.title("🔐 Admin Login")
@@ -93,7 +93,7 @@ if menu == "Register Member":
             # WhatsApp Message
             msg = f"""
 Hello {name},
-Welcome to our Gym 💪
+Welcome to AI Fitnes club 2025 💪
 
 Plan: {plan}
 Amount: ₹{amount}
@@ -107,17 +107,32 @@ Thank you!
             st.markdown(f"[Send WhatsApp Confirmation]({wa_link})")
 
 # ================= ADMIN DASHBOARD =================
+# ---------------- LOAD FUNCTION (KEEP AT TOP OF FILE) ----------------
+def load_data():
+    if not os.path.exists(file):
+        return pd.DataFrame()
+
+    try:
+        return pd.read_csv(file)
+    except Exception as e:
+        st.error("Data file corrupted. Resetting...")
+        os.remove(file)
+        return pd.DataFrame()
+
 if menu == "Admin Dashboard":
     if not logged_in:
         st.error("Login required")
     else:
         st.title("📊 Admin Dashboard")
 
-        if os.path.exists(file):
-            df = pd.read_csv(file)
+        df = load_data()   # ✅ CALL FUNCTION
 
-            st.subheader("All Members")
+        st.subheader("All Members")
+
+        if not df.empty:
             st.dataframe(df)
+        else:
+            st.warning("No data available")
 
             # Search
             search = st.text_input("Search by Name or Phone")

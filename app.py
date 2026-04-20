@@ -19,7 +19,17 @@ else:
     st.sidebar.warning("Enter Admin Credentials")
 
 # ---------------- FILE ----------------
-file = "members.csv"
+def load_data():
+    if not os.path.exists(file):
+        return pd.DataFrame()
+
+    try:
+        return pd.read_csv(file)
+    except Exception as e:
+        st.error("Data file corrupted. Resetting...")
+        os.remove(file)
+        return pd.DataFrame()
+
 
 # ---------------- PLANS ----------------
 plans = {
@@ -108,16 +118,6 @@ Thank you!
 
 # ================= ADMIN DASHBOARD =================
 # ---------------- LOAD FUNCTION (KEEP AT TOP OF FILE) ----------------
-def load_data():
-    if not os.path.exists(file):
-        return pd.DataFrame()
-
-    try:
-        return pd.read_csv(file)
-    except Exception as e:
-        st.error("Data file corrupted. Resetting...")
-        os.remove(file)
-        return pd.DataFrame()
 
 if menu == "Admin Dashboard":
     if not logged_in:

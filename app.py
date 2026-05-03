@@ -1,182 +1,158 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 import os
-from datetime import datetime, timedelta
+from twilio.rest import Client
 
-st.set_page_config(page_title="AI Fitness club 2025")
+# ---------- CONFIG ----------
+st.set_page_config(page_title="AI Fitness Club 2025", layout="wide")
 
-# ---------------- LOGIN SYSTEM ----------------
-st.sidebar.title("🔐 Admin Login")
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "1234"
 
-username = st.sidebar.text_input("Username")
-password = st.sidebar.text_input("Password", type="password")
+DATA_FILE = "members.csv"
 
-if username == "admin" and password == "1234":
-    st.sidebar.success("Login Successful")
-    logged_in = True
-else:
-    logged_in = False
-    st.sidebar.warning("Enter Admin Credentials")
-
-# ---------------- FILE ----------------
-def load_data():
-    if not os.path.exists(file):
-        return pd.DataFrame()
-
+# ---------- WHATSAPP FUNCTION ----------
+def send_whatsapp(to_number, message):
     try:
-        return pd.read_csv(file)
+        account_sid = "YOUR_TWILIO_SID"
+        auth_token = "YOUR_TWILIO_AUTH_TOKEN"
+        client = Client(account_sid, auth_token)
+
+        client.messages.create(
+            body=message,
+            from_="whatsapp:+14155238886",  # Twilio Sandbox number
+            to=f"whatsapp:{to_number}"
+        )
     except Exception as e:
-        st.error("Data file corrupted. Resetting...")
-        os.remove(file)
-        return pd.DataFrame()
+        print("WhatsApp Error:", e)
 
+# ---------- LOAD DATA ----------
+if os.path.exists(DATA_FILE):
+    df = pd.read_csv(DATA_FILE)
+else:
+    df = pd.DataFrame(columns=[
+        "S.No", "Name", "Mobile", "Fees Status",
+        "Start Date", "Expiry Date", "Receipt No", "Notified"
+    ])
 
-# ---------------- PLANS ----------------
-plans = {
-    "Monthly": 30,
-    "Quarterly": 90,
-    "Half Yearly": 180,
-    "Yearly": 365
-}
+# ---------- LOGIN ----------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-charges = {
-    "Monthly": 1000,
-    "Quarterly": 2700,
-    "Half Yearly": 4000,
-    "Yearly": 6000
-}
+def login():
+    st.title("🏋️ AI Fitness Club 2025 - Admin Login")
+    user = st.text_input("Username")
+    pwd = st.text_input("Password", type="password")
 
-pt_charges = {
-    "Monthly": 4900,
-    "Quarterly": 12900,
-    "Half Yearly": 24900,
-    "Yearly": 44900
-}
+    if st.button("Login"):
+        if user == ADMIN_USERNAME and pwd == ADMIN_PASSWORD:
+            st.session_state.logged_in = True
+            st.success("Login Successful")
+        else:
+            st.error("Invalid Credentials")
 
-# ---------------- MENU ----------------
-menu = st.selectbox("Select Option", ["Register Member", "Admin Dashboard"])
+# ---------- DASHBOARD ----------
+def dashboard():
+    global df
 
-# ================= REGISTER =================
-if menu == "Register Member":
-    st.title("🏋️ Register New Member")
+    st.title("🏋️ AI Fitness Club 2025 Dashboard")
+
+    # ---- ADD MEMBER ----
+    st.subheader("➕ Add New Member")
 
     with st.form("form"):
-        name = st.text_input("Full Name")
-        phone = st.text_input("Phone Number")
-        plan = st.selectbox("Plan", list(plans.keys()))
-        pt = st.checkbox("Add Personal Training")
-        payment_status = st.selectbox("Payment Status", ["Paid", "Pending"])
-        
-        submit = st.form_submit_button("Register")
+        name = st.text_input("Name")
+        mobile = st.text_input("Mobile Number (with country code e.g. +91...)")
+        fees = st.selectbox("Fees Status", ["Paid", "Unpaid"])
+        start = st.date_input("Start Date")
+        expiry = st.date_input("Expiry Date")
+        receipt = st.text_input("Receipt Number")
 
-    if submit:
-        if name == "" or phone == "":
-            st.error("Fill all details")
-        else:
-            start_date = datetime.today()
-            expiry_date = start_date + timedelta(days=plans[plan])
+        submit = st.form_submit_button("Add Member")
 
-            amount = charges[plan]
-            if pt:
-                amount += pt_charges[plan]
-
-            data = {
+        if submit:
+            new_row = {
+                "S.No": len(df) + 1,
                 "Name": name,
-                "Phone": phone,
-                "Plan": plan,
-                "PT": pt,
-                "Amount": amount,
-                "Payment": payment_status,
-                "Start Date": start_date.strftime("%Y-%m-%d"),
-                "Expiry Date": expiry_date.strftime("%Y-%m-%d")
+                "Mobile": mobile,
+                "Fees Status": fees,
+                "Start Date": start,
+                "Expiry Date": expiry,
+                "Receipt No": receipt,
+                "Notified": "No"
             }
 
-            df = pd.DataFrame([data])
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            df.to_csv(DATA_FILE, index=False)
+            st.success("Member Added")
+        # fix mobile no.type
+        df = pd.read_csv("members.csv")
+        df["Mobile"] = df["Mobile"].astype(str)
 
-            if os.path.exists(file):
-                df.to_csv(file, mode='a', header=False, index=False)
-            else:
-                df.to_csv(file, index=False)
-
-            st.success("Member Registered ✅")
-
-            # WhatsApp Message
-            msg = f"""
-Hello {name},
-Welcome to AI Fitnes club 2025 💪
-
-Plan: {plan}
-Amount: ₹{amount}
-Start Date: {start_date.date()}
-Expiry Date: {expiry_date.date()}
-
-Thank you!
-"""
-
-            wa_link = f"https://wa.me/91{phone}?text={msg.replace(' ', '%20')}"
-            st.markdown(f"[Send WhatsApp Confirmation]({wa_link})")
-
-# ================= ADMIN DASHBOARD =================
-# ---------------- LOAD FUNCTION (KEEP AT TOP OF FILE) ----------------
-
-if menu == "Admin Dashboard":
-    if not logged_in:
-        st.error("Login required")
+     # do not add duplicate member
+    if mobile in df["Mobile"].values:
+        st.error("member already exists!")
     else:
-        st.title("📊 Admin Dashboard")
+        st.success("Added")
 
-        df = load_data()   # ✅ CALL FUNCTION
+     # ---- DISPLAY ----
+    st.subheader("📋 Members List")
 
-        st.subheader("All Members")
-
-        if not df.empty:
-            st.dataframe(df)
+    def color_status(val):
+        if val == "Paid":
+            return "background-color: lightgreen"
         else:
-            st.warning("No data available")
+            return "background-color: lightcoral"
 
-            # Search
-            search = st.text_input("Search by Name or Phone")
-            if search:
-                result = df[
-                    df["Name"].str.contains(search, case=False) |
-                    df["Phone"].astype(str).str.contains(search)
-                ]
-                st.dataframe(result)
+    if not df.empty:
+        styled = df.style.applymap(color_status, subset=["Fees Status"])
+        st.dataframe(styled, use_container_width=True)
+    else:
+        st.warning("No data available")
 
-            # Expiry Alert
-            st.subheader("⚠️ Expiring Soon (Next 5 Days)")
+    # ---- EXPIRY CHECK ----
+    st.subheader("🔔 Expiry Notifications")
 
-            df["Expiry Date"] = pd.to_datetime(df["Expiry Date"])
-            today = datetime.today()
+    today = datetime.today().date()
+    expired_list = []
 
-            expiring = df[
-                (df["Expiry Date"] - today).dt.days <= 5
-            ]
+    for i, row in df.iterrows():
+        try:
+            expiry_date = pd.to_datetime(row["Expiry Date"]).date()
 
-            if not expiring.empty:
-                st.dataframe(expiring)
+            if expiry_date < today:
+                expired_list.append(row)
 
-                # WhatsApp Reminder
-                for i, row in expiring.iterrows():
-                    msg = f"""
-Hello {row['Name']},
-Your gym membership is expiring on {row['Expiry Date'].date()}.
+                # SEND WHATSAPP ONLY ONCE
+                if row["Notified"] == "No":
+                    send_whatsapp(
+                        row["Mobile"],
+                        f"Hello {row['Name']}, your gym membership has expired. Please renew."
+                    )
+                    df.at[i, "Notified"] = "Yes"
 
-Please renew soon 💪
-"""
-                    wa_link = f"https://wa.me/91{row['Phone']}?text={msg.replace(' ', '%20')}"
-                    st.markdown(f"[Remind {row['Name']}]({wa_link})")
+        except:
+            continue
 
-            else:
-                st.success("No memberships expiring soon")
+    df.to_csv(DATA_FILE, index=False)
 
-            # Download CSV
-            st.download_button(
-                "Download Data",
-                df.to_csv(index=False),
-                "members.csv",
-                "text/csv"
-            )
+    if expired_list:
+        st.warning(f"{len(expired_list)} Membership(s) Expired")
+        st.dataframe(pd.DataFrame(expired_list))
+    else:
+        st.success("No expired memberships")
 
-        else:
-            st.warning("No data found")
+     # ---- DOWNLOAD ----
+    st.download_button(
+        "⬇ Download Data",
+        df.to_csv(index=False),
+        "members.csv",
+        "text/csv"
+    )
+
+ # ---------- MAIN ----------
+if not st.session_state.logged_in:
+    login()
+else:
+    dashboard()

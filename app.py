@@ -7,16 +7,16 @@ from twilio.rest import Client
 # ---------- CONFIG ----------
 st.set_page_config(page_title="AI Fitness Club 2025", layout="wide")
 
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "1234"
+ADMIN_USERNAME = "aifitnessclub2025"
+ADMIN_PASSWORD = "abcd1234"
 
 DATA_FILE = "members.csv"
 
 # ---------- WHATSAPP FUNCTION ----------
 def send_whatsapp(to_number, message):
     try:
-        account_sid = "YOUR_TWILIO_SID"
-        auth_token = "YOUR_TWILIO_AUTH_TOKEN"
+        account_sid = "AC80acafb570def28c4b2913904830ecbe"
+        auth_token = "3c77e14c384e3bf9855265ec1dd1a785"
         client = Client(account_sid, auth_token)
 
         client.messages.create(
@@ -156,3 +156,5 @@ if not st.session_state.logged_in:
     login()
 else:
     dashboard()
+
+   

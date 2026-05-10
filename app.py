@@ -1,5 +1,3 @@
-from ast import Name
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -10,150 +8,183 @@ from twilio.rest import Client
 st.set_page_config(page_title="AI Fitness Club 2025", layout="wide")
 
 ADMIN_USERNAME = "aifitnessclub2025"
-
 ADMIN_PASSWORD = "abcd1234"
-
 DATA_FILE = "members.csv"
 
 # ---------- WHATSAPP FUNCTION ----------
 def send_whatsapp(to_number, message):
     try:
-        account_sid = "AC80acafb570def28c4b2913904830ecbe"
-        auth_token = "3c77e14c384e3bf9855265ec1dd1a785"
+        account_sid = "YOUR_TWILIO_ACCOUNT_SID"
+        auth_token = "YOUR_TWILIO_AUTH_TOKEN"
+
         client = Client(account_sid, auth_token)
 
         client.messages.create(
             body=message,
-            from_="whatsapp:+14155238886",  # Twilio Sandbox number
+            from_="whatsapp:+14155238886",  # Twilio Sandbox Number
             to=f"whatsapp:{to_number}"
         )
     except Exception as e:
-        print("WhatsApp Error:", e)
+        st.error(f"WhatsApp Error: {e}")
+
 
 # ---------- LOAD DATA ----------
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
-else:
-    df = pd.DataFrame(columns=[
-        "S.No", "Name", "Contact", "Fees Status",
-        "Start Date", "Expiry Date", "Receipt No", "Notified"
-    ])
+def load_data():
+    if os.path.exists(DATA_FILE):
+        df = pd.read_csv(DATA_FILE)
+        df["Contact"] = df["Contact"].astype(str)
+        return df
+    else:
+        return pd.DataFrame(columns=[
+            "S.No",
+            "Name",
+            "Contact",
+            "Fees Status",
+            "Start Date",
+            "Expiry Date",
+            "Receipt No",
+            "Notified"
+        ])
 
-# ---------- LOGIN ----------
+
+# ---------- SAVE DATA ----------
+def save_data(df):
+    df.to_csv(DATA_FILE, index=False)
+
+
+# ---------- SESSION STATE ----------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+
+# ---------- LOGIN ----------
 def login():
     st.title("🏋️ AI Fitness Club 2025 - Admin Login")
-    user = st.text_input("Username")
-    pwd = st.text_input("Password", type="password")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if user == ADMIN_USERNAME and pwd == ADMIN_PASSWORD:
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
             st.session_state.logged_in = True
             st.success("Login Successful")
+            st.rerun()
         else:
             st.error("Invalid Credentials")
 
+
 # ---------- DASHBOARD ----------
 def dashboard():
-    global df
+    df = load_data()
 
     st.title("🏋️ AI Fitness Club 2025 Dashboard")
 
-    # ---- ADD MEMBER ----
+    # ---------- ADD MEMBER ----------
     st.subheader("➕ Add New Member")
 
-    with st.form("form"):
+    with st.form("add_member_form"):
         name = st.text_input("Name")
-        mobile = st.text_input("Contact")
-        fees = st.selectbox("Fees Status", ["Paid", "Unpaid"])
-        start = st.date_input("Start Date")
-        expiry = st.date_input("Expiry Date")
-        receipt = st.text_input("Receipt No.")
+        mobile = st.text_input("Contact Number")
+        fees_status = st.selectbox("Fees Status", ["Paid", "Unpaid"])
+        start_date = st.date_input("Start Date")
+        expiry_date = st.date_input("Expiry Date")
+        receipt_no = st.text_input("Receipt No.")
 
         submit = st.form_submit_button("Add Member")
 
         if submit:
-            new_row = {
-                "S.No": len(df) + 1,
-                "Name": name,
-                "Contact": mobile ,
-                "Fees Status": fees,
-                "Start Date": start,
-                "Expiry Date": expiry,
-                "Receipt No": receipt,
-                "Notified": "No"
-            }
+            mobile = mobile.strip()
 
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            df.to_csv(DATA_FILE, index=False)
-            st.success("Member Added")
-        # fix mobile no.type
-        df = pd.read_csv("members.csv")
-        df["Contact"] = df["Contact"].astype(str)
+            if mobile == "":
+                st.error("Contact number is required.")
 
-     # ---- DISPLAY ----
+            # ---------- DUPLICATE CHECK ----------
+            elif mobile in df["Contact"].astype(str).values:
+                st.warning("Member already exists.")
+
+            else:
+                new_row = {
+                    "S.No": len(df) + 1,
+                    "Name": name.strip(),
+                    "Contact": mobile,
+                    "Fees Status": fees_status,
+                    "Start Date": start_date,
+                    "Expiry Date": expiry_date,
+                    "Receipt No": receipt_no.strip(),
+                    "Notified": "No"
+                }
+
+                df = pd.concat(
+                    [df, pd.DataFrame([new_row])],
+                    ignore_index=True
+                )
+
+                save_data(df)
+                st.success("Member Added Successfully.")
+                st.rerun()
+
+    # ---------- MEMBERS LIST ----------
     st.subheader("📋 Members List")
 
     def color_status(val):
         if val == "Paid":
             return "background-color: lightgreen"
         else:
-            return "background-color: saffron"
+            return "background-color: lightcoral"
 
     if not df.empty:
-        styled = df.style.applymap(color_status, subset=["Fees Status"])
-        st.dataframe(styled, use_container_width=True)
+        styled_df = df.style.map(color_status, subset=["Fees Status"])
+        st.dataframe(styled_df, use_container_width=True)
     else:
-        st.warning("No data available")
+        st.info("No members available.")
 
-    # ---- EXPIRY CHECK ----
+    # ---------- EXPIRY NOTIFICATIONS ----------
     st.subheader("🔔 Expiry Notifications")
 
     today = datetime.today().date()
-    expired_list = []
+    expired_members = []
 
     for i, row in df.iterrows():
         try:
-            expiry_date = pd.to_datetime(row["Expiry Date"]).date()
+            expiry = pd.to_datetime(row["Expiry Date"]).date()
 
-            if expiry_date < today:
-                expired_list.append(row)
+            if expiry < today:
+                expired_members.append(row)
 
-                # SEND WHATSAPP ONLY ONCE
-                if row["Notified"] == "No":
+                # Send WhatsApp only once
+                if str(row["Notified"]) == "No":
                     send_whatsapp(
                         row["Contact"],
                         f"Hello {row['Name']}, your gym membership has expired. Please renew."
                     )
                     df.at[i, "Notified"] = "Yes"
 
-        except:
+        except Exception:
             continue
 
-    df.to_csv(DATA_FILE, index=False)
+    save_data(df)
 
-    if expired_list:
-        st.warning(f"{len(expired_list)} Membership(s) Expired")
-        st.dataframe(pd.DataFrame(expired_list))
+    if expired_members:
+        st.warning(f"{len(expired_members)} membership(s) expired.")
+        st.dataframe(pd.DataFrame(expired_members), use_container_width=True)
     else:
-        st.success("No expired memberships")
+        st.success("No expired memberships.")
 
-     # ---- DOWNLOAD ----
+    # ---------- DOWNLOAD BUTTON ----------
     st.download_button(
-        "⬇ Download Data",
-        df.to_csv(index=False),
-        "members.csv",
-        "text/csv"
+        label="⬇ Download Data",
+        data=df.to_csv(index=False),
+        file_name="members.csv",
+        mime="text/csv"
     )
 
- # ---------- MAIN ----------
+
+# ---------- MAIN ----------
 if not st.session_state.logged_in:
     login()
 else:
-    if st.sidebar.button("logout"):
+    if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
-
+        
     dashboard()

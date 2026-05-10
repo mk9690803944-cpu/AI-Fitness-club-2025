@@ -10,6 +10,7 @@ from twilio.rest import Client
 st.set_page_config(page_title="AI Fitness Club 2025", layout="wide")
 
 ADMIN_USERNAME = "aifitnessclub2025"
+
 ADMIN_PASSWORD = "abcd1234"
 
 DATA_FILE = "members.csv"

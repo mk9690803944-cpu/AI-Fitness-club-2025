@@ -1,3 +1,5 @@
+from ast import Name
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -32,7 +34,7 @@ if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
 else:
     df = pd.DataFrame(columns=[
-        "S.No", "Name", "Mobile", "Fees Status",
+        "S.No", "Name", "Contact", "Fees Status",
         "Start Date", "Expiry Date", "Receipt No", "Notified"
     ])
 
@@ -63,11 +65,11 @@ def dashboard():
 
     with st.form("form"):
         name = st.text_input("Name")
-        mobile = st.text_input("Mobile Number (with country code e.g. +91...)")
+        mobile = st.text_input("Contact")
         fees = st.selectbox("Fees Status", ["Paid", "Unpaid"])
         start = st.date_input("Start Date")
         expiry = st.date_input("Expiry Date")
-        receipt = st.text_input("Receipt Number")
+        receipt = st.text_input("Receipt No.")
 
         submit = st.form_submit_button("Add Member")
 
@@ -75,7 +77,7 @@ def dashboard():
             new_row = {
                 "S.No": len(df) + 1,
                 "Name": name,
-                "Mobile": mobile,
+                "Contact": mobile ,
                 "Fees Status": fees,
                 "Start Date": start,
                 "Expiry Date": expiry,
@@ -88,13 +90,7 @@ def dashboard():
             st.success("Member Added")
         # fix mobile no.type
         df = pd.read_csv("members.csv")
-        df["Mobile"] = df["Mobile"].astype(str)
-
-     # do not add duplicate member
-    if mobile in df["Mobile"].values:
-        st.error("member already exists!")
-    else:
-        st.success("Added")
+        df["Contact"] = df["Contact"].astype(str)
 
      # ---- DISPLAY ----
     st.subheader("📋 Members List")
@@ -103,7 +99,7 @@ def dashboard():
         if val == "Paid":
             return "background-color: lightgreen"
         else:
-            return "background-color: lightcoral"
+            return "background-color: saffron"
 
     if not df.empty:
         styled = df.style.applymap(color_status, subset=["Fees Status"])
@@ -127,7 +123,7 @@ def dashboard():
                 # SEND WHATSAPP ONLY ONCE
                 if row["Notified"] == "No":
                     send_whatsapp(
-                        row["Mobile"],
+                        row["Contact"],
                         f"Hello {row['Name']}, your gym membership has expired. Please renew."
                     )
                     df.at[i, "Notified"] = "Yes"
@@ -155,6 +151,8 @@ def dashboard():
 if not st.session_state.logged_in:
     login()
 else:
-    dashboard()
+    if st.sidebar.button("logout"):
+        st.session_state.logged_in = False
+        st.rerun()
 
-   
+    dashboard()

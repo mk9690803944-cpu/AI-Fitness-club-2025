@@ -1,190 +1,747 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import os
+from supabase import create_client
 from twilio.rest import Client
+from urllib.parse import quote
 
-# ---------- CONFIG ----------
-st.set_page_config(page_title="AI Fitness Club 2025", layout="wide")
 
-ADMIN_USERNAME = "aifitnessclub2025"
-ADMIN_PASSWORD = "abcd1234"
-DATA_FILE = "members.csv"
+# =========================================================
+# CONFIG
+# =========================================================
 
-# ---------- WHATSAPP FUNCTION ----------
+st.set_page_config(
+    page_title="AI Fitness Club 2025",
+    page_icon="🏋️",
+    layout="wide"
+)
+
+
+# =========================================================
+# SUPABASE CONNECTION
+# =========================================================
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_PUBLISHABLE_KEY"]
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+
+# =========================================================
+# WHATSAPP FUNCTION
+# =========================================================
+
 def send_whatsapp(to_number, message):
-    try:
-        account_sid = "AC80acafb570def28c4b2913904830ecbe"
-        auth_token = "3c77e14c384e3bf9855265ec1dd1a785"
 
-        client = Client(account_sid, auth_token)
+    try:
+
+        account_sid = st.secrets["TWILIO_ACCOUNT_SID"]
+        auth_token = st.secrets["TWILIO_AUTH_TOKEN"]
+
+        client = Client(
+            account_sid,
+            auth_token
+        )
 
         client.messages.create(
             body=message,
-            from_="whatsapp:+14155238886",  # Twilio Sandbox Number
+            from_="whatsapp:+14155238886",
             to=f"whatsapp:{to_number}"
         )
+
+        return True
+
     except Exception as e:
-        st.error(f"WhatsApp Error: {e}")
+
+        st.error(
+            f"WhatsApp Error: {e}"
+        )
+
+        return False
 
 
-# ---------- LOAD DATA ----------
-def load_data():
-    if os.path.exists(DATA_FILE):
-        df = pd.read_csv(DATA_FILE)
-        df["Contact"] = df["Contact"].astype(str)
-        return df
-    else:
-        return pd.DataFrame(columns=[
-            "S.No",
-            "Name",
-            "Contact",
-            "Fees Status",
-            "Start Date",
-            "Expiry Date",
-            "Receipt No",
-            "Notified"
-        ])
+# =========================================================
+# LOAD MEMBERS FROM SUPABASE
+# =========================================================
+
+def load_members():
+
+    try:
+
+        response = (
+            supabase
+            .table("members")
+            .select("*")
+            .order("id")
+            .execute()
+        )
+
+        data = response.data
+
+        if not data:
+
+            return pd.DataFrame(
+                columns=[
+                    "id",
+                    "S.No",
+                    "Name",
+                    "Mobile",
+                    "Fees Status",
+                    "Start Date",
+                    "Expiry Date",
+                    "Receipt No",
+                    "Notified"
+                ]
+            )
+
+        return pd.DataFrame(data)
+
+    except Exception as e:
+
+        st.error(
+            f"Database Error: {e}"
+        )
+
+        return pd.DataFrame()
 
 
-# ---------- SAVE DATA ----------
-def save_data(df):
-    df.to_csv(DATA_FILE, index=False)
+# =========================================================
+# SUPABASE AUTH LOGIN
+# =========================================================
 
-
-# ---------- SESSION STATE ----------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-
-# ---------- LOGIN ----------
 def login():
-    st.title("🏋️ AI Fitness Club 2025 - Admin Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    st.title(
+        "🏋️ AI Fitness Club 2025"
+    )
 
-    if st.button("Login"):
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            st.session_state.logged_in = True
-            st.success("Login Successful")
+    st.subheader(
+        "Admin Login"
+    )
+
+    email = st.text_input(
+        "Email"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.button(
+        "Login",
+        use_container_width=True
+    ):
+
+        if not email or not password:
+
+            st.error(
+                "Please enter email and password."
+            )
+
+            return
+
+        try:
+
+            # Supabase Authentication
+
+            response = supabase.auth.sign_in_with_password(
+                {
+                    "email": email,
+                    "password": password
+                }
+            )
+
+            # Save authenticated session
+
+            st.session_state["access_token"] = (
+                response.session.access_token
+            )
+
+            st.session_state["refresh_token"] = (
+                response.session.refresh_token
+            )
+
+            st.session_state["user"] = (
+                response.user
+            )
+
+            st.session_state["logged_in"] = True
+
+            st.success(
+                "Login Successful"
+            )
+
             st.rerun()
-        else:
-            st.error("Invalid Credentials")
+
+        except Exception as e:
+
+            st.error(
+                "Invalid email or password."
+            )
+
+            st.caption(
+                f"Login error: {e}"
+            )
 
 
-# ---------- DASHBOARD ----------
+# =========================================================
+# LOGOUT
+# =========================================================
+
+def logout():
+
+    try:
+
+        supabase.auth.sign_out()
+
+    except Exception:
+
+        pass
+
+    st.session_state.pop(
+        "access_token",
+        None
+    )
+
+    st.session_state.pop(
+        "refresh_token",
+        None
+    )
+
+    st.session_state.pop(
+        "user",
+        None
+    )
+
+    st.session_state["logged_in"] = False
+
+    st.rerun()
+
+
+# =========================================================
+# DASHBOARD
+# =========================================================
+
 def dashboard():
-    df = load_data()
 
-    st.title("🏋️ AI Fitness Club 2025 Dashboard")
+    st.title(
+        "🏋️ AI Fitness Club 2025 Dashboard"
+    )
 
-    # ---------- ADD MEMBER ----------
-    st.subheader("➕ Add New Member")
+    # -----------------------------------------------------
+    # CURRENT USER
+    # -----------------------------------------------------
 
-    with st.form("add_member_form"):
-        name = st.text_input("Name")
-        mobile = st.text_input("Contact Number")
-        fees_status = st.selectbox("Fees Status", ["Paid", "Unpaid"])
-        start_date = st.date_input("Start Date")
-        expiry_date = st.date_input("Expiry Date")
-        receipt_no = st.text_input("Receipt No.")
+    user = st.session_state.get(
+        "user"
+    )
 
-        submit = st.form_submit_button("Add Member")
+    if user:
+
+        st.caption(
+            f"Logged in as: {user.email}"
+        )
+
+
+    # -----------------------------------------------------
+    # LOAD DATA
+    # -----------------------------------------------------
+
+    df = load_members()
+
+
+    # =====================================================
+    # ADD MEMBER
+    # =====================================================
+
+    st.subheader(
+        "➕ Add New Member"
+    )
+
+    with st.form(
+        "member_form"
+    ):
+
+        name = st.text_input(
+            "Name"
+        )
+
+        mobile = st.text_input(
+            "Mobile Number",
+            placeholder="+91XXXXXXXXXX"
+        )
+
+        fees = st.selectbox(
+            "Fees Status",
+            ["Paid", "Unpaid"]
+        )
+
+        start = st.date_input(
+            "Start Date"
+        )
+
+        expiry = st.date_input(
+            "Expiry Date"
+        )
+
+        receipt = st.text_input(
+            "Receipt Number"
+        )
+
+        submit = st.form_submit_button(
+            "Add Member",
+            use_container_width=True
+        )
+
+
+        # =================================================
+        # ADD MEMBER
+        # =================================================
 
         if submit:
-            mobile = mobile.strip()
 
-            if mobile == "":
-                st.error("Contact number is required.")
+            # ---------------------------------------------
+            # VALIDATION
+            # ---------------------------------------------
 
-            # ---------- DUPLICATE CHECK ----------
-            elif mobile in df["Contact"].astype(str).values:
-                st.warning("Member already exists.")
+            if not name.strip():
 
-            else:
-                new_row = {
-                    "S.No": len(df) + 1,
-                    "Name": name.strip(),
-                    "Contact": mobile,
-                    "Fees Status": fees_status,
-                    "Start Date": start_date,
-                    "Expiry Date": expiry_date,
-                    "Receipt No": receipt_no.strip(),
-                    "Notified": "No"
-                }
-
-                df = pd.concat(
-                    [df, pd.DataFrame([new_row])],
-                    ignore_index=True
+                st.error(
+                    "Please enter member name."
                 )
 
-                save_data(df)
-                st.success("Member Added Successfully.")
+                st.stop()
+
+
+            if not mobile.strip():
+
+                st.error(
+                    "Please enter mobile number."
+                )
+
+                st.stop()
+
+
+            # ---------------------------------------------
+            # DUPLICATE MOBILE CHECK
+            # ---------------------------------------------
+
+            try:
+
+                existing = (
+                    supabase
+                    .table("members")
+                    .select("id")
+                    .eq(
+                        "Mobile",
+                        mobile.strip()
+                    )
+                    .execute()
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Unable to check member: {e}"
+                )
+
+                st.stop()
+
+
+            if existing.data:
+
+                st.error(
+                    "❌ Member with this mobile number already exists!"
+                )
+
+                st.stop()
+
+
+            # ---------------------------------------------
+            # NEXT SERIAL NUMBER
+            # ---------------------------------------------
+
+            if df.empty:
+
+                next_serial = 1
+
+            else:
+
+                try:
+
+                    serial_numbers = pd.to_numeric(
+                        df["S.No"],
+                        errors="coerce"
+                    )
+
+                    maximum = serial_numbers.max()
+
+                    if pd.isna(maximum):
+
+                        next_serial = 1
+
+                    else:
+
+                        next_serial = (
+                            int(maximum) + 1
+                        )
+
+                except Exception:
+
+                    next_serial = (
+                        len(df) + 1
+                    )
+
+
+            # ---------------------------------------------
+            # DATES
+            # ---------------------------------------------
+
+            start_date_str = (
+                start.strftime("%Y-%m-%d")
+            )
+
+            expiry_date_str = (
+                expiry.strftime("%Y-%m-%d")
+            )
+
+
+            # ---------------------------------------------
+            # NEW MEMBER
+            # ---------------------------------------------
+
+            new_member = {
+
+                "S.No": next_serial,
+
+                "Name": name.strip(),
+
+                "Mobile": mobile.strip(),
+
+                "Fees Status": fees,
+
+                "Start Date": start_date_str,
+
+                "Expiry Date": expiry_date_str,
+
+                "Receipt No": receipt.strip(),
+
+                "Notified": "No"
+            }
+
+
+            # ---------------------------------------------
+            # INSERT INTO SUPABASE
+            # ---------------------------------------------
+
+            try:
+
+                supabase \
+                    .table("members") \
+                    .insert(new_member) \
+                    .execute()
+
+
+                st.success(
+                    "✅ Member Added Successfully!"
+                )
+
+
+                # -----------------------------------------
+                # WHATSAPP CONFIRMATION
+                # -----------------------------------------
+
+                message = f"""
+Hello {name},
+
+Welcome to AI Fitness Club 2025 💪
+
+Plan: Monthly
+Amount: ₹1000
+
+Start Date: {start_date_str}
+Expiry Date: {expiry_date_str}
+
+Receipt No: {receipt}
+
+Thank you!
+AI Fitness Club 2025
+"""
+
+
+                encoded_message = quote(
+                    message
+                )
+
+
+                wa_link = (
+                    f"https://wa.me/"
+                    f"{mobile.strip()}"
+                    f"?text={encoded_message}"
+                )
+
+
+                st.markdown(
+                    f"[📱 Send WhatsApp Confirmation]"
+                    f"({wa_link})"
+                )
+
+
                 st.rerun()
 
-    # ---------- MEMBERS LIST ----------
-    st.subheader("📋 Members List")
 
-    def color_status(val):
-        if val == "Paid":
-            return "background-color: lightgreen"
-        else:
-            return "background-color: lightcoral"
+            except Exception as e:
 
-    if not df.empty:
-        styled_df = df.style.map(color_status, subset=["Fees Status"])
-        st.dataframe(styled_df, use_container_width=True)
-    else:
-        st.info("No members available.")
+                st.error(
+                    f"Unable to add member: {e}"
+                )
 
-    # ---------- EXPIRY NOTIFICATIONS ----------
-    st.subheader("🔔 Expiry Notifications")
 
-    today = datetime.today().date()
-    expired_members = []
+    # =====================================================
+    # REFRESH DATA
+    # =====================================================
 
-    for i, row in df.iterrows():
-        try:
-            expiry = pd.to_datetime(row["Expiry Date"]).date()
+    df = load_members()
 
-            if expiry < today:
-                expired_members.append(row)
 
-                # Send WhatsApp only once
-                if str(row["Notified"]) == "No":
-                    send_whatsapp(
-                        row["Contact"],
-                        f"Hello {row['Name']}, your gym membership has expired. Please renew."
-                    )
-                    df.at[i, "Notified"] = "Yes"
+    # =====================================================
+    # MEMBERS LIST
+    # =====================================================
 
-        except Exception:
-            continue
-
-    save_data(df)
-
-    if expired_members:
-        st.warning(f"{len(expired_members)} membership(s) expired.")
-        st.dataframe(pd.DataFrame(expired_members), use_container_width=True)
-    else:
-        st.success("No expired memberships.")
-
-    # ---------- DOWNLOAD BUTTON ----------
-    st.download_button(
-        label="⬇ Download Data",
-        data=df.to_csv(index=False),
-        file_name="members.csv",
-        mime="text/csv"
+    st.subheader(
+        "📋 Members List"
     )
 
 
-# ---------- MAIN ----------
-if not st.session_state.logged_in:
+    if not df.empty:
+
+        df["Mobile"] = (
+            df["Mobile"]
+            .astype(str)
+        )
+
+
+        # ---------------------------------------------
+        # STATUS COLOR
+        # ---------------------------------------------
+
+        def color_status(value):
+
+            if value == "Paid":
+
+                return (
+                    "background-color: lightgreen"
+                )
+
+            elif value == "Unpaid":
+
+                return (
+                    "background-color: lightcoral"
+                )
+
+            return ""
+
+
+        styled_df = (
+            df.style
+            .map(
+                color_status,
+                subset=["Fees Status"]
+            )
+        )
+
+
+        st.dataframe(
+            styled_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+    else:
+
+        st.warning(
+            "No members available."
+        )
+
+
+    # =====================================================
+    # EXPIRY CHECK
+    # =====================================================
+
+    st.subheader(
+        "🔔 Expiry Notifications"
+    )
+
+
+    today = datetime.today().date()
+
+    expired_list = []
+
+
+    if not df.empty:
+
+        for _, row in df.iterrows():
+
+            try:
+
+                expiry_date = (
+                    pd.to_datetime(
+                        row["Expiry Date"]
+                    ).date()
+                )
+
+
+                # -----------------------------------------
+                # EXPIRED
+                # -----------------------------------------
+
+                if expiry_date < today:
+
+                    expired_list.append(
+                        row
+                    )
+
+
+                    # -------------------------------------
+                    # SEND ONLY ONCE
+                    # -------------------------------------
+
+                    if (
+                        str(row["Notified"])
+                        == "No"
+                    ):
+
+                        message = (
+                            f"Hello {row['Name']}, "
+                            f"your gym membership has expired. "
+                            f"Please renew your membership."
+                        )
+
+
+                        success = send_whatsapp(
+                            row["Mobile"],
+                            message
+                        )
+
+
+                        if success:
+
+                            (
+                                supabase
+                                .table("members")
+                                .update({
+                                    "Notified": "Yes"
+                                })
+                                .eq(
+                                    "id",
+                                    int(row["id"])
+                                )
+                                .execute()
+                            )
+
+
+            except Exception:
+
+                continue
+
+
+    # =====================================================
+    # SHOW EXPIRED MEMBERS
+    # =====================================================
+
+    if expired_list:
+
+        st.warning(
+            f"⚠️ {len(expired_list)} "
+            f"Membership(s) Expired"
+        )
+
+
+        expired_df = pd.DataFrame(
+            expired_list
+        )
+
+
+        st.dataframe(
+            expired_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+    else:
+
+        st.success(
+            "✅ No expired memberships"
+        )
+
+
+    # =====================================================
+    # DOWNLOAD CSV
+    # =====================================================
+
+    st.subheader(
+        "⬇ Download Data"
+    )
+
+
+    current_df = load_members()
+
+
+    if not current_df.empty:
+
+        csv_data = current_df.to_csv(
+            index=False
+        )
+
+
+        st.download_button(
+
+            label="⬇ Download Members CSV",
+
+            data=csv_data,
+
+            file_name="members.csv",
+
+            mime="text/csv",
+
+            use_container_width=True
+        )
+
+
+    # =====================================================
+    # LOGOUT
+    # =====================================================
+
+    st.divider()
+
+
+    if st.button(
+        "Logout",
+        use_container_width=True
+    ):
+
+        logout()
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+if "logged_in" not in st.session_state:
+
+    st.session_state["logged_in"] = False
+
+
+if not st.session_state["logged_in"]:
+
     login()
+
 else:
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-        
+
     dashboard()

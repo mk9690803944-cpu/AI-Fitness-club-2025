@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from supabase import create_client
+from supabase import create_client.client
 from twilio.rest import Client
 from urllib.parse import quote
 
